@@ -4,7 +4,7 @@ info:
   description: |-
     This is the OpenAPI 3.0 specification describing the containers used
     for the job processor in the context of the dcm in the lzvnrw-project.
-  version: 0.1.1
+  version: 1.0.0
 servers:
   - url: 'http://localhost:8080/'
 externalDocs:
@@ -185,6 +185,11 @@ paths:
                             Arguments for the validation_payload stage.
                             See the Object Validator API for more information.
                           additionalProperties: true
+                        prepare_ip:
+                          type: object
+                          description:
+                            Arguments for the prepare_ip stage.
+                            See the Preparation Module API for more information.
                         build_sip:
                           type: object
                           description:
@@ -206,8 +211,29 @@ paths:
                   required:
                     - from
                     - args
-                id:
-                  $ref: '#/components/schemas/ConfigId'
+                context:
+                  title: JobContext
+                  type: object
+                  description: job execution context
+                  properties:
+                    jobConfigId:
+                      $ref: '#/components/schemas/ConfigId'
+                    userTriggered:
+                      $ref: '#/components/schemas/ConfigId'
+                    datetimeTriggered:
+                      $ref: '#/components/schemas/ISODateTime'
+                    triggerType:
+                      type: string
+                      description: |-
+                        trigger type
+
+                        if 'test', records are not written to the
+                        database
+                      enum:
+                        - manual
+                        - scheduled
+                        - onetime
+                        - test
                 callbackUrl:
                   $ref: '#/components/schemas/CallbackUrl'
               required:
@@ -761,13 +787,95 @@ components:
                     - debug
                     - controls_api
                     - abort
+                database:
+                  type: object
+                  description:
+                    database-related settings
+                  properties:
+                    adapter:
+                      type: string
+                      description: database adapter name
+                      example: postgres
+                    schemaVersion:
+                      type: string
+                      description: dcm-database schema version string
+                      example: "1.0.0"
+                    settings:
+                      type: object
+                      description: database-related settings
+                      properties:
+                        poolSize:
+                          type: number
+                          description: size of database connection-pool
+                          example: 10
+                        poolOverflow:
+                          type: boolean
+                          description:
+                            whether to allow the pool to overflow during
+                            high load (dynamically allocates more connections
+                            when needed)
+                          example: true
+                        connectionTimeout:
+                          type: number
+                          nullable: true
+                          description:
+                            duration after which a database connection-
+                            attempt times out; a value of null corresponds
+                            to no timeout
+                          example: 10.0
+                        file:
+                          type: string
+                          nullable: true
+                          description:
+                            file path for a SQLite database (relative to
+                            working directory); null corresponds to an
+                            in-memory database
+                          example: sqlite.db
+                        host:
+                          type: string
+                          description: PostgreSQL host name
+                          example: database
+                        name:
+                          type: string
+                          description: PostgreSQL database name
+                          example: dcm-database
+                        user:
+                          type: string
+                          description: PostgreSQL user name
+                          example: dcm
+                        port:
+                          type: string
+                          description: PostgreSQL port
+                          example: 5432
+                        password:
+                          type: boolean
+                          description: whether PostgreSQL password is set
+                          example: true
+                        passfile:
+                          type: string
+                          description: PostgreSQL passfile path
+                          example: pass
+                  required:
+                    - adapter
+                    - schemaVersion
+                    - settings
                 process:
                   type: object
                   description: process-related settings
                   properties:
-                    timeout:
+                    request_timeout:
                       type: object
-                      description: service timeout-related settings
+                      description: timeout-related settings for the submission of a request to a service
+                      properties:
+                        duration:
+                          type: integer
+                          description: timeout duration in seconds
+                          example: 30
+                      required:
+                        - duration
+                    process_timeout:
+                      type: object
+                      description: timeout-related settings for the completion of a service job
                       properties:
                         duration:
                           type: integer
@@ -776,10 +884,12 @@ components:
                       required:
                         - duration
                   required:
-                    - timeout
+                    - request_timeout
+                    - process_timeout
               required:
                 - allow_cors
                 - orchestration
+                - database
                 - process
             plugins:
               type: object
@@ -824,6 +934,7 @@ components:
         - validation
           - validation_metadata
           - validation_payload
+        - prepare_ip
         - build_sip
         - transfer
         - ingest
@@ -834,6 +945,7 @@ components:
         - validation
         - validation_metadata
         - validation_payload
+        - prepare_ip
         - build_sip
         - transfer
         - ingest

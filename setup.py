@@ -2,7 +2,7 @@ import os
 from setuptools import setup
 
 setup(
-    version="0.1.1",
+    version="1.0.0",
     name="dcm-job-processor-api",
     description="specification of the DCM Job Processor API",
     author="LZV.nrw",
