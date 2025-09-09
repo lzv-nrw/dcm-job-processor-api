@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.0.0] - 2025-09-09
+
+### Changed
+
+- **Breaking:** updated `SelfDescription`-schema regarding new `orchestra`-package of `dcm-common`
+
+### Removed
+
+- **Breaking:** removed obsolete broadcast- & requeue-options in abort
+
 ## [1.1.0] - 2025-08-20
 
 ### Added
@@ -10,7 +20,7 @@
 
 ### Changed
 
-- **Breaking:** renamed property `timeout` in the `process` object of `SelfDescription`-schema to `process_timeout` 
+- **Breaking:** renamed property `timeout` in the `process` object of `SelfDescription`-schema to `process_timeout`
 - updated `SelfDescription`-schema to include relational database
 
 ### Added
