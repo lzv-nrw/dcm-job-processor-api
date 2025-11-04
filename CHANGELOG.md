@@ -1,5 +1,19 @@
 # Changelog
 
+## [3.0.0] - 2025-11-04
+
+### Changed
+
+- **Breaking:** changed POST-/process request-body and job-data schema
+
+### Added
+
+- added field `artifactsTTL` to `context` in request body of POST-/process
+
+### Removed
+
+### Fixed
+
 ## [2.0.0] - 2025-09-09
 
 ### Changed

@@ -4,7 +4,7 @@ info:
   description: |-
     This is the OpenAPI 3.0 specification describing the containers used
     for the job processor in the context of the dcm in the lzvnrw-project.
-  version: 2.0.0
+  version: 3.0.0
 servers:
   - url: 'http://localhost:8080/'
 externalDocs:
@@ -80,21 +80,24 @@ paths:
                       data:
                         $ref: '#/components/schemas/JobData'
                     example:
-                      data:
-                        success: false
-                        records:
-                          /remote_storage/sip/abcde-12345:
-                            completed: true
-                            success: false
-                            stages:
-                              transfer:
-                                completed: true
-                                success: true
-                                logId: 0@transfer_module
-                              ingest:
-                                completed: true
-                                success: false
-                                logId: 1@backend
+                      success: true
+                      issues: 1
+                      records:
+                        cd68e084-bef1-4d92-9a36-6908e573fb5d:
+                          started: true
+                          completed: true
+                          status: build-ip-error
+                          oaiIdentifier: oai:abcde-12345
+                          oaiDatestamp: "2025-01-01"
+                          stages:
+                            import_ies:
+                              completed: true
+                              success: true
+                              logId: 0@import_module
+                            build_ip:
+                              completed: true
+                              success: false
+                              logId: 1@ip_builder
         '400':
           $ref: '#/components/responses/400BadRequest'
         '404':
@@ -129,8 +132,7 @@ paths:
     post:
       summary: process jobs
       description:
-        Run a sequence of steps in the DCM processing pipeline and
-        write generated logs to the database.
+        Triggers a job-execution.
         If the request is accepted, a 201-response is triggered
         containing a JobToken.
       operationId: process
@@ -146,78 +148,32 @@ paths:
                 process:
                   type: object
                   properties:
-                    from:
-                      $ref: '#/components/schemas/Stage'
-                      example: import_ies
-                    to:
-                      $ref: '#/components/schemas/Stage'
-                      example: ingest
-                    args:
-                      type: object
-                      description: Stage-specific arguments
-                      properties:
-                        import_ies:
-                          type: object
-                          description:
-                            Arguments for the import_ies stage.
-                            See the Import Module API for more information.
-                          additionalProperties: true
-                        import_ips:
-                          type: object
-                          description: Arguments for the import_ips stage.
-                            See the Import Module API for more information.
-                          additionalProperties: true
-                        build_ip:
-                          type: object
-                          description:
-                            Arguments for the build_ip stage.
-                            See the IP Builder API for more information.
-                          additionalProperties: true
-                        validation_metadata:
-                          type: object
-                          description:
-                            Arguments for the validation_metadata stage.
-                            See the IP Builder API for more information.
-                          additionalProperties: true
-                        validation_payload:
-                          type: object
-                          description:
-                            Arguments for the validation_payload stage.
-                            See the Object Validator API for more information.
-                          additionalProperties: true
-                        prepare_ip:
-                          type: object
-                          description:
-                            Arguments for the prepare_ip stage.
-                            See the Preparation Module API for more information.
-                        build_sip:
-                          type: object
-                          description:
-                            Arguments for the build_sip stage.
-                            See the SIP Builder API for more information.
-                          additionalProperties: true
-                        transfer:
-                          type: object
-                          description:
-                            Arguments for the transfer stage.
-                            See the Transfer Module API for more information.
-                          additionalProperties: true
-                        ingest:
-                          type: object
-                          description:
-                            Arguments for the ingest stage.
-                            See the Backend API for more information.
-                          additionalProperties: true
+                    id:
+                      $ref: '#/components/schemas/ConfigId'
+                    testMode:
+                      type: boolean
+                      description: |-
+                        whether to run the job in test-mode (i.e. only up
+                        to building a submission information package)
+
+                        If the test-mode is active, the resume-argument
+                        is ignored and no records are resumed.
+                      example: true
+                      default: false
+                    resume:
+                      type: boolean
+                      description:
+                        whether to resume records that are not fully
+                        processed yet (i.e., 'in-process')
+                      example: false
+                      default: true
                   required:
-                    - from
-                    - args
+                    - id
                 context:
                   title: JobContext
                   type: object
                   description: job execution context
                   properties:
-                    jobConfigId:
-                      $ref: '#/components/schemas/ConfigId'
                     userTriggered:
                       $ref: '#/components/schemas/ConfigId'
                     datetimeTriggered:
@@ -234,6 +190,15 @@ paths:
                         - scheduled
                         - onetime
                         - test
+                    artifactsTTL:
+                      type: integer
+                      description: |-
+                        job artifacts time to live in seconds
+
+                        This value is used to estimate the datetime of
+                        expiration for artifacts that are created during
+                        this job.
+                      example: 604800
                 token:
                   type: string
                   description:
@@ -408,30 +373,123 @@ components:
         success:
           type: boolean
           description: overall success of the job
-          example: true
+          example: false
+        issues:
+          type: integer
+          description: number of records that had errors
+          example: 0
         records:
           title: records
           type: object
           description:
-            details about the running jobs;
-            keys correspond to, e.g., the OAI identifier
+            details about the running jobs; keys are identifiers that
+            are only valid in the context of the given report
           additionalProperties:
             type: object
             properties:
+              id:
+                type: string
+                description:
+                  identifier of this record (same as key in records)
+                example: cd68e084-bef1-4d92-9a36-6908e573fb5d
+              started:
+                type: boolean
+                description:
+                  whether processing for this record has been started
+                example: true
               completed:
                 type: boolean
-                description: whether still in progress
+                description: whether this record still needs processing
                 example: true
-              success:
+              status:
+                type: string
+                description: record status
+                enum:
+                  - in-process
+                  - complete
+                  - process-error
+                  - import-error
+                  - obj-val-error
+                  - ip-val-error
+                  - build-ip-error
+                  - prepare-ip-error
+                  - build-sip-error
+                  - transfer-error
+                  - ingest-error
+              datetimeChanged:
+                $ref: '#/components/schemas/ISODateTime'
+              bitstream:
                 type: boolean
-                description: overall success of the record
+                description:
+                  whether this record has been processed as bitstream
                 example: true
+                default: false
+              skipObjectValidation:
+                type: boolean
+                description:
+                  whether object validation has been skipped for this record
+                example: true
+                default: false
+              sourceOrganization:
+                type: string
+                description: name of the source organization
+                example: "https://d-nb.info/gnd/0"
+              externalId:
+                type: string
+                description:
+                  an identifier for the record within the source system
+                example: oai:abcde-12345
+              originSystemId:
+                type: string
+                description: an identifier for the source system
+                example: my-oai-system
+              oaiIdentifier:
+                type: string
+                description: oai record-identifier if applicable
+                example: oai:abcde-12345
+              oaiDatestamp:
+                type: string
+                description: oai record-datestamp if applicable
+                example: "2025-01-01"
+              hotfolderOriginalPath:
+                type: string
+                description: original path in hotfolder if applicable
+                example: original/path
+              archiveSipId:
+                type: string
+                description:
+                  an identifier for the submission information package
+                  within the archive system
+                example: SIP1234
+              archiveIeId:
+                type: string
+                description:
+                  an identifier for the intellectual entity within the
+                  archive system
+                example: IE5678
+              ieId:
+                type: string
+                description:
+                  identifier of the intellectual entity within the DCM-
+                  database (unique for the combination of a job-
+                  configuration, source-system identifier, and target
+                  archive identifier)
+                example: 144ff9a5-6ad8-49c0-83b4-73ee6b9a526e
               stages:
                 type: object
-                description:
-                  details about stages for this record;
-                  keys correspond to the identifiers given in the
-                  Stage-schema 'components/schemas/Stage'
+                description: |-
+                  details for individual stages of this record
+
+                  the following stage-identifiers are used:
+                  - import_ies/import_ips
+                  - build_ip (if applicable)
+                  - validation (consists of multiple stages)
+                    - validation_metadata
+                    - validation_payload
+                  - prepare_ip (if applicable)
+                  - build_sip
+                  - transfer
+                  - ingest
                 additionalProperties:
                   type: object
                   properties:
@@ -443,29 +501,30 @@ components:
                       type: boolean
                       description: overall success of the stage
                       example: false
+                    token:
+                      $ref: '#/components/schemas/Token'
                     logId:
                       $ref: '#/components/schemas/ReportIdentifier'
+                    artifact:
+                      type: string
+                      description: |-
+                        artifact created during this stage for this record
+                        as reported by the corresponding service
+
+                        In some stages this references data outside of the
+                        shared storage (like after transfer).
+                      example: sip/abcde-12345
                   required:
                     - completed
             required:
+              - id
+              - started
+              - completed
+              - status
               - stages
       required:
+        - issues
         - records
-      example:
-        success: false
-        records:
-          /remote_storage/sip/abcde-12345:
-            completed: true
-            success: false
-            stages:
-              transfer:
-                completed: true
-                success: true
-                logId: 0@transfer_module
-              ingest:
-                completed: true
-                success: false
-                logId: 1@backend
     Report:
       title: Report
       description: |-
@@ -870,37 +929,6 @@ components:
         - description
         - version
         - configuration
-    Stage:
-      type: string
-      description: |-
-        Enumeration of possible stages for the starting or final module
-        of the process chain.
-
-        Stages can be organized into meta-stages
-        (e.g., 'validation' and the subordinate 'validation_metadata'
-        and 'validation_payload')
-
-        The order is as follows:
-        - import_ies/import_ips
-        - build_ip (if applicable)
-        - validation
-          - validation_metadata
-          - validation_payload
-        - prepare_ip
-        - build_sip
-        - transfer
-        - ingest
-      enum:
-        - import_ies
-        - import_ips
-        - build_ip
-        - validation
-        - validation_metadata
-        - validation_payload
-        - prepare_ip
-        - build_sip
-        - transfer
-        - ingest
   parameters:
     Token: # see also components/schemas/Token
       in: query
