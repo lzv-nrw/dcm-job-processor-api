@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.3.0] - 2025-12-05
+
+### Added
+
+- added support for batched job processing via `collectionId` in request-context and `finalBatch`-flag in `JobData`
+- added Bag-Info-metadata in the records' objects of the report
+- added property `notifyBackend` to execution context in `POST-/process`
+
+### Fixed
+
+- added back support for test-jobs using one-shot configurations
+
 ## [3.0.0] - 2025-11-04
 
 ### Changed

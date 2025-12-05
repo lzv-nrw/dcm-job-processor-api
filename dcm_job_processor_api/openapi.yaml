@@ -4,7 +4,7 @@ info:
   description: |-
     This is the OpenAPI 3.0 specification describing the containers used
     for the job processor in the context of the dcm in the lzvnrw-project.
-  version: 3.0.0
+  version: 3.3.0
 servers:
   - url: 'http://localhost:8080/'
 externalDocs:
@@ -147,19 +147,12 @@ paths:
               properties:
                 process:
                   type: object
+                  description:
+                    process-request body; depending on testMode, either
+                    (no test) id or (test) testConfig are required
                   properties:
                     id:
                       $ref: '#/components/schemas/ConfigId'
-                    testMode:
-                      type: boolean
-                      description: |-
-                        whether to run the job in test-mode (i.e. only up
-                        to building a submission information package)
-
-                        If the test-mode is active, the resume-argument
-                        is ignored and no records are resumed.
-                      example: true
-                      default: false
                     resume:
                       type: boolean
                       description:
@@ -167,8 +160,39 @@ paths:
                         processed yet (i.e., 'in-process')
                       example: false
                       default: true
-                  required:
-                    - id
+                    testMode:
+                      type: boolean
+                      description: |-
+                        whether to run the job in test-mode (i.e. only up
+                        to building a submission information package and
+                        no IEs or records are written to the database)
+
+                        If the test-mode is active, the resume-argument
+                        is ignored and no records are resumed.
+                      example: true
+                      default: false
+                    testConfig:
+                      type: object
+                      description:
+                        job configuration for the given test
+                      properties:
+                        templateId:
+                          $ref: '#/components/schemas/ConfigId'
+                        dataSelection:
+                          type: object
+                          description:
+                            data selection information (details on import)
+                          nullable: true
+                        dataProcessing:
+                          type: object
+                          description:
+                            data processing information (e.g. metadata
+                            mapping/operations)
+                          nullable: true
+                      required:
+                        - templateId
+                        - dataSelection
+                        - dataProcessing
                 context:
                   title: JobContext
                   type: object
@@ -190,6 +214,13 @@ paths:
                         - scheduled
                         - onetime
                         - test
+                    notifyBackend:
+                      type: boolean
+                      description:
+                        whether to notify backend-service after job has
+                        been completed
+                      default: False
+                      example: True
                     artifactsTTL:
                       type: integer
                       description: |-
@@ -199,6 +230,11 @@ paths:
                         expiration for artifacts that are created during
                         this job.
                       example: 604800
+                    collectionId:
+                      type: string
+                      description:
+                        job collection identifier (batched jobs)
+                      example: 23776bf4-c144-4948-92e8-207018519bb8
                 token:
                   type: string
                   description:
@@ -378,6 +414,11 @@ components:
           type: integer
           description: number of records that had errors
           example: 0
+        finalBatch:
+          type: boolean
+          description:
+            whether a batch size limitation has been exceeded
+          example: false
         records:
           title: records
           type: object
@@ -455,6 +496,14 @@ components:
                 type: string
                 description: original path in hotfolder if applicable
                 example: original/path
+              bagInfoMetadata:
+                type: object
+                description: metadata from bag-info.txt
+                additionalProperties:
+                  type: array
+                  description: values of a metadata field
+                  items:
+                    type: string
               archiveSipId:
                 type: string
                 description:
